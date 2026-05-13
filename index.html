@@ -511,62 +511,78 @@
 <script type="module">
 
 // ─── Texture generation ───────────────────────────────────────────────
-function makeClothTexture(size = 512) {
+function makeClothTexture(size = 1024) {
   const c = document.createElement('canvas');
   c.width = c.height = size;
   const ctx = c.getContext('2d');
 
-  // 高級リネン風：温かみのある象牙色ベース
-  ctx.fillStyle = '#ede8de';
+  // ピュアホワイトベース
+  ctx.fillStyle = '#f8f8f8';
   ctx.fillRect(0, 0, size, size);
 
-  const step = 10; // 糸の間隔
+  // 全体の光源グラデーション（左上から柔らかく当たる光）
+  const ambient = ctx.createLinearGradient(0, 0, size * 0.6, size);
+  ambient.addColorStop(0,   'rgba(255,255,255,0.22)');
+  ambient.addColorStop(0.5, 'rgba(240,240,245,0.05)');
+  ambient.addColorStop(1,   'rgba(210,212,220,0.10)');
+  ctx.fillStyle = ambient;
+  ctx.fillRect(0, 0, size, size);
 
-  // 横糸（緯糸）を描く
-  for (let y = 0; y < size; y += step) {
-    const even = Math.floor(y / step) % 2 === 0;
-    // 糸の影（下側）
-    ctx.fillStyle = 'rgba(120,108,90,0.18)';
-    ctx.fillRect(0, y + step - 1, size, 1);
-    // 糸のハイライト（上側）
-    ctx.fillStyle = 'rgba(255,255,255,0.38)';
-    ctx.fillRect(0, y, size, 1);
-    // 糸本体
-    ctx.fillStyle = even ? 'rgba(160,148,128,0.14)' : 'rgba(140,128,108,0.08)';
-    ctx.fillRect(0, y + 1, size, step - 2);
-  }
+  // 布のドレープ（ヒダ）パラメータ
+  // y:縦位置, amp:振れ幅, phase:位相, sw:影の幅, sa:影の濃さ, ha:ハイライト濃さ
+  const folds = [
+    { y: 0.13, amp: 0.055, phase: 0.5,  sw: 110, sa: 0.13, ha: 0.10 },
+    { y: 0.29, amp: 0.090, phase: 1.3,  sw: 140, sa: 0.20, ha: 0.15 },
+    { y: 0.46, amp: 0.070, phase: 0.9,  sw: 120, sa: 0.17, ha: 0.13 },
+    { y: 0.61, amp: 0.100, phase: 0.2,  sw: 150, sa: 0.22, ha: 0.16 },
+    { y: 0.77, amp: 0.060, phase: 1.7,  sw: 105, sa: 0.14, ha: 0.11 },
+    { y: 0.91, amp: 0.045, phase: 0.6,  sw:  90, sa: 0.11, ha: 0.09 },
+  ];
 
-  // 縦糸（経糸）を描く
-  for (let x = 0; x < size; x += step) {
-    const even = Math.floor(x / step) % 2 === 0;
-    ctx.fillStyle = even ? 'rgba(148,136,116,0.12)' : 'rgba(130,118,98,0.06)';
-    ctx.fillRect(x + 1, 0, step - 2, size);
-  }
+  folds.forEach(fold => {
+    const baseY = fold.y * size;
+    const amp   = fold.amp * size;
 
-  // 交差点の織り目（浮き沈み）
-  for (let y = 0; y < size; y += step) {
-    for (let x = 0; x < size; x += step) {
-      const warpOver = (Math.floor(x / step) + Math.floor(y / step)) % 2 === 0;
-      if (warpOver) {
-        // 経糸が上 → 少し明るく
-        ctx.fillStyle = 'rgba(210,200,182,0.22)';
-        ctx.fillRect(x + 1, y + 1, step - 2, step - 2);
-        ctx.fillStyle = 'rgba(255,255,255,0.28)';
-        ctx.fillRect(x + 1, y + 1, step - 2, 2);
-      } else {
-        // 緯糸が上 → 少し暗く（影）
-        ctx.fillStyle = 'rgba(100,88,70,0.10)';
-        ctx.fillRect(x + 1, y + 1, step - 2, step - 2);
-      }
+    // x座標から布の湾曲Y座標を計算
+    const foldY = (x, offset = 0) =>
+      baseY + Math.sin((x / size) * Math.PI * 1.6 + fold.phase) * amp + offset;
+
+    // ── 影（谷）──
+    ctx.save();
+    ctx.filter = `blur(${Math.round(fold.sw * 0.55)}px)`;
+    ctx.beginPath();
+    for (let x = 0; x <= size; x += 3) {
+      x === 0 ? ctx.moveTo(x, foldY(x)) : ctx.lineTo(x, foldY(x));
     }
-  }
+    ctx.strokeStyle = `rgba(155,162,178,${fold.sa})`;
+    ctx.lineWidth   = fold.sw;
+    ctx.lineCap     = 'round';
+    ctx.stroke();
+    ctx.restore();
 
-  // 全体に柔らかいグラデーションをかけてより高級感を出す
-  const shine = ctx.createLinearGradient(0, 0, size, size);
-  shine.addColorStop(0,    'rgba(255,255,255,0.12)');
-  shine.addColorStop(0.45, 'rgba(255,255,255,0.06)');
-  shine.addColorStop(1,    'rgba(255,255,255,0.0)');
-  ctx.fillStyle = shine;
+    // ── ハイライト（稜線）──
+    ctx.save();
+    ctx.filter = `blur(${Math.round(fold.sw * 0.28)}px)`;
+    ctx.beginPath();
+    const hlOff = -fold.sw * 0.42;
+    for (let x = 0; x <= size; x += 3) {
+      x === 0 ? ctx.moveTo(x, foldY(x, hlOff)) : ctx.lineTo(x, foldY(x, hlOff));
+    }
+    ctx.strokeStyle = `rgba(255,255,255,${fold.ha})`;
+    ctx.lineWidth   = fold.sw * 0.42;
+    ctx.lineCap     = 'round';
+    ctx.stroke();
+    ctx.restore();
+  });
+
+  ctx.filter = 'none';
+
+  // 仕上げ：絹のような光沢
+  const sheen = ctx.createLinearGradient(0, 0, size * 0.45, size * 0.45);
+  sheen.addColorStop(0,   'rgba(255,255,255,0.20)');
+  sheen.addColorStop(0.6, 'rgba(255,255,255,0.04)');
+  sheen.addColorStop(1,   'rgba(255,255,255,0.0)');
+  ctx.fillStyle = sheen;
   ctx.fillRect(0, 0, size, size);
 
   return c;
@@ -1030,9 +1046,7 @@ async function applyBackground(targetCanvas, removedBlob, overlayEl, showOverlay
   // Background
   if (bgSetting !== 'transparent') {
     if (bgSetting === 'cloth' && clothTexture) {
-      const pat = ctx.createPattern(clothTexture, 'repeat');
-      ctx.fillStyle = pat;
-      ctx.fillRect(0, 0, dim.w, dim.h);
+      ctx.drawImage(clothTexture, 0, 0, dim.w, dim.h);
     } else if (bgSetting === 'marble' && marbleTexture) {
       ctx.drawImage(marbleTexture, 0, 0, dim.w, dim.h);
     } else if (bgSetting === 'custom-image' && customBgImage) {
