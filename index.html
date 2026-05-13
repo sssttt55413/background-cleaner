@@ -511,34 +511,64 @@
 <script type="module">
 
 // ─── Texture generation ───────────────────────────────────────────────
-function makeClothTexture(size = 256) {
+function makeClothTexture(size = 512) {
   const c = document.createElement('canvas');
   c.width = c.height = size;
   const ctx = c.getContext('2d');
-  ctx.fillStyle = '#f9f8f5';
+
+  // 高級リネン風：温かみのある象牙色ベース
+  ctx.fillStyle = '#ede8de';
   ctx.fillRect(0, 0, size, size);
-  const step = 7;
+
+  const step = 10; // 糸の間隔
+
+  // 横糸（緯糸）を描く
   for (let y = 0; y < size; y += step) {
-    const thick = Math.floor(y / step) % 2 === 0;
-    ctx.strokeStyle = `rgba(182,175,165,${thick ? 0.22 : 0.11})`;
-    ctx.lineWidth = thick ? 1.3 : 0.7;
-    ctx.beginPath(); ctx.moveTo(0, y + 0.5); ctx.lineTo(size, y + 0.5); ctx.stroke();
+    const even = Math.floor(y / step) % 2 === 0;
+    // 糸の影（下側）
+    ctx.fillStyle = 'rgba(120,108,90,0.18)';
+    ctx.fillRect(0, y + step - 1, size, 1);
+    // 糸のハイライト（上側）
+    ctx.fillStyle = 'rgba(255,255,255,0.38)';
+    ctx.fillRect(0, y, size, 1);
+    // 糸本体
+    ctx.fillStyle = even ? 'rgba(160,148,128,0.14)' : 'rgba(140,128,108,0.08)';
+    ctx.fillRect(0, y + 1, size, step - 2);
   }
+
+  // 縦糸（経糸）を描く
   for (let x = 0; x < size; x += step) {
-    const thick = Math.floor(x / step) % 2 === 0;
-    ctx.strokeStyle = `rgba(182,175,165,${thick ? 0.18 : 0.08})`;
-    ctx.lineWidth = thick ? 1.1 : 0.6;
-    ctx.beginPath(); ctx.moveTo(x + 0.5, 0); ctx.lineTo(x + 0.5, size); ctx.stroke();
+    const even = Math.floor(x / step) % 2 === 0;
+    ctx.fillStyle = even ? 'rgba(148,136,116,0.12)' : 'rgba(130,118,98,0.06)';
+    ctx.fillRect(x + 1, 0, step - 2, size);
   }
-  // interlace dots
+
+  // 交差点の織り目（浮き沈み）
   for (let y = 0; y < size; y += step) {
     for (let x = 0; x < size; x += step) {
-      if ((Math.floor(x / step) + Math.floor(y / step)) % 2 === 0) {
-        ctx.fillStyle = 'rgba(175,168,158,0.13)';
-        ctx.fillRect(x + 1, y + 1, step / 2, step / 2);
+      const warpOver = (Math.floor(x / step) + Math.floor(y / step)) % 2 === 0;
+      if (warpOver) {
+        // 経糸が上 → 少し明るく
+        ctx.fillStyle = 'rgba(210,200,182,0.22)';
+        ctx.fillRect(x + 1, y + 1, step - 2, step - 2);
+        ctx.fillStyle = 'rgba(255,255,255,0.28)';
+        ctx.fillRect(x + 1, y + 1, step - 2, 2);
+      } else {
+        // 緯糸が上 → 少し暗く（影）
+        ctx.fillStyle = 'rgba(100,88,70,0.10)';
+        ctx.fillRect(x + 1, y + 1, step - 2, step - 2);
       }
     }
   }
+
+  // 全体に柔らかいグラデーションをかけてより高級感を出す
+  const shine = ctx.createLinearGradient(0, 0, size, size);
+  shine.addColorStop(0,    'rgba(255,255,255,0.12)');
+  shine.addColorStop(0.45, 'rgba(255,255,255,0.06)');
+  shine.addColorStop(1,    'rgba(255,255,255,0.0)');
+  ctx.fillStyle = shine;
+  ctx.fillRect(0, 0, size, size);
+
   return c;
 }
 
@@ -546,47 +576,93 @@ function makeMarbleTexture(size = 1024) {
   const c = document.createElement('canvas');
   c.width = c.height = size;
   const ctx = c.getContext('2d');
-  const grad = ctx.createLinearGradient(0, 0, size, size);
-  grad.addColorStop(0,   '#f6f2ed');
-  grad.addColorStop(0.5, '#faf7f3');
-  grad.addColorStop(1,   '#f2eeea');
-  ctx.fillStyle = grad;
+
+  // ベース：温かみのある白
+  const base = ctx.createLinearGradient(0, 0, size, size);
+  base.addColorStop(0,    '#f7f4ef');
+  base.addColorStop(0.35, '#faf8f5');
+  base.addColorStop(0.7,  '#f5f2ec');
+  base.addColorStop(1,    '#f8f5f0');
+  ctx.fillStyle = base;
   ctx.fillRect(0, 0, size, size);
 
+  // 石目（ベイン）を多点折れ線で描く
   function vein(x0, y0, x1, y1, w, alpha, depth) {
-    const mx = (x0 + x1) / 2 + (Math.random() - 0.45) * size * 0.35;
-    const my = (y0 + y1) / 2 + (Math.random() - 0.45) * size * 0.25;
+    const steps = 30;
+    const pts = [[x0, y0]];
+    for (let i = 1; i <= steps; i++) {
+      const t = i / steps;
+      const jitter = size * 0.12 * Math.sin(t * Math.PI);
+      pts.push([
+        x0 + (x1 - x0) * t + (Math.random() - 0.5) * jitter,
+        y0 + (y1 - y0) * t + (Math.random() - 0.5) * size * 0.06
+      ]);
+    }
+    // 太いアウトライン（柔らかい影）
     ctx.beginPath();
-    ctx.strokeStyle = `rgba(155,145,135,${alpha})`;
-    ctx.lineWidth = w;
-    ctx.lineCap = 'round';
-    ctx.moveTo(x0, y0);
-    ctx.quadraticCurveTo(mx, my, x1, y1);
+    ctx.strokeStyle = `rgba(130,118,105,${alpha * 0.35})`;
+    ctx.lineWidth = w + 2;
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    pts.slice(1).forEach(p => ctx.lineTo(p[0], p[1]));
     ctx.stroke();
-    if (depth > 0 && Math.random() > 0.4) {
-      const t = 0.25 + Math.random() * 0.5;
-      const bx = x0 + (x1 - x0) * t + (Math.random() - 0.5) * 60;
-      const by = y0 + (y1 - y0) * t + (Math.random() - 0.5) * 60;
-      vein(bx, by, bx + (Math.random() - 0.5) * size * 0.3, by + (Math.random() - 0.2) * size * 0.3, w * 0.45, alpha * 0.65, depth - 1);
+    // 本線
+    ctx.beginPath();
+    ctx.strokeStyle = `rgba(148,136,122,${alpha})`;
+    ctx.lineWidth = w;
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    pts.slice(1).forEach(p => ctx.lineTo(p[0], p[1]));
+    ctx.stroke();
+    // ハイライト（石の光沢）
+    ctx.beginPath();
+    ctx.strokeStyle = `rgba(255,255,255,${alpha * 0.5})`;
+    ctx.lineWidth = w * 0.3;
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    pts.slice(1).forEach(p => ctx.lineTo(p[0], p[1]));
+    ctx.stroke();
+
+    if (depth > 0 && Math.random() > 0.35) {
+      const bi = Math.floor(8 + Math.random() * 14);
+      if (bi < pts.length) {
+        const [bx, by] = pts[bi];
+        vein(bx, by,
+          bx + (Math.random() - 0.4) * size * 0.3,
+          by + (Math.random() - 0.4) * size * 0.3,
+          w * 0.45, alpha * 0.65, depth - 1);
+      }
     }
   }
-  // major veins
-  for (let i = 0; i < 5; i++) {
-    vein(Math.random() * size * 0.3, Math.random() * size,
-         size * 0.7 + Math.random() * size * 0.3, Math.random() * size,
-         1.5 + Math.random() * 2.5, 0.10 + Math.random() * 0.12, 2);
+
+  // メインの太い石目（3〜4本）
+  for (let i = 0; i < 4; i++) {
+    vein(
+      Math.random() * size * 0.25, Math.random() * size,
+      size * 0.75 + Math.random() * size * 0.25, Math.random() * size,
+      2.5 + Math.random() * 3, 0.22 + Math.random() * 0.14, 2
+    );
   }
-  // minor veins
+  // 細い石目（6本）
+  for (let i = 0; i < 6; i++) {
+    const sx = Math.random() * size, sy = Math.random() * size;
+    vein(sx, sy,
+      sx + (Math.random() - 0.5) * size * 0.55,
+      sy + (Math.random() - 0.3) * size * 0.55,
+      0.8 + Math.random() * 1.5, 0.10 + Math.random() * 0.10, 1);
+  }
+  // 極細の毛細石目（10本）
   for (let i = 0; i < 10; i++) {
     const sx = Math.random() * size, sy = Math.random() * size;
-    vein(sx, sy, sx + (Math.random() - 0.5) * size * 0.4, sy + (Math.random() - 0.3) * size * 0.4,
-         0.5 + Math.random() * 1.2, 0.05 + Math.random() * 0.08, 0);
+    vein(sx, sy,
+      sx + (Math.random() - 0.5) * size * 0.25,
+      sy + (Math.random() - 0.5) * size * 0.25,
+      0.3 + Math.random() * 0.6, 0.05 + Math.random() * 0.05, 0);
   }
-  // sheen
-  const sheen = ctx.createLinearGradient(0, 0, size * 0.8, size);
-  sheen.addColorStop(0,   'rgba(255,255,255,0)');
-  sheen.addColorStop(0.5, 'rgba(255,255,255,0.09)');
-  sheen.addColorStop(1,   'rgba(255,255,255,0)');
+
+  // 光沢グラデーション
+  const sheen = ctx.createLinearGradient(0, 0, size * 0.7, size);
+  sheen.addColorStop(0,    'rgba(255,255,255,0.0)');
+  sheen.addColorStop(0.4,  'rgba(255,255,255,0.14)');
+  sheen.addColorStop(1,    'rgba(255,255,255,0.0)');
   ctx.fillStyle = sheen;
   ctx.fillRect(0, 0, size, size);
   return c;
