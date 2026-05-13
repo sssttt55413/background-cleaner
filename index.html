@@ -1,0 +1,1008 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>背景クリーナー - メルカリ出品用</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#ff4858">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="背景クリーナー">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic UI", sans-serif;
+      background: #f5f5f5;
+      color: #333;
+      min-height: 100vh;
+    }
+
+    header {
+      background: #ff4858;
+      color: white;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+    header h1 { font-size: 20px; font-weight: 700; }
+    header .badge {
+      background: rgba(255,255,255,0.25);
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 10px;
+    }
+
+    .container { max-width: 980px; margin: 0 auto; padding: 24px 16px; }
+
+    /* ── Upload area ── */
+    .upload-area {
+      border: 2px dashed #ccc;
+      border-radius: 16px;
+      background: white;
+      padding: 48px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color .2s, background .2s;
+      position: relative;
+    }
+    .upload-area:hover, .upload-area.drag-over {
+      border-color: #ff4858;
+      background: #fff5f5;
+    }
+    .upload-area input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
+      height: 100%;
+    }
+    .upload-icon { font-size: 48px; margin-bottom: 12px; }
+    .upload-area h2 { font-size: 18px; margin-bottom: 8px; color: #444; }
+    .upload-area p { color: #999; font-size: 14px; }
+
+    /* ── Controls panel ── */
+    .controls {
+      background: white;
+      border-radius: 16px;
+      padding: 20px;
+      margin-top: 20px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+    }
+    .ctrl-group { flex: 1; min-width: 200px; }
+    .ctrl-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: #999;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      margin-bottom: 10px;
+    }
+
+    /* Background swatches */
+    .bg-options { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .bg-option {
+      width: 46px;
+      height: 46px;
+      border-radius: 10px;
+      border: 3px solid transparent;
+      cursor: pointer;
+      transition: transform .15s, border-color .15s;
+      position: relative;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .bg-option canvas { width: 100%; height: 100%; display: block; }
+    .bg-option:hover { transform: scale(1.1); }
+    .bg-option.active { border-color: #ff4858; }
+    .bg-option.swatch-transparent {
+      background: repeating-conic-gradient(#ccc 0% 25%, white 0% 50%) 0 0 / 14px 14px;
+    }
+    .bg-option.swatch-rainbow {
+      background: conic-gradient(red,yellow,lime,cyan,blue,magenta,red);
+      display: flex; align-items: center; justify-content: center; font-size: 18px;
+    }
+    .bg-option.swatch-image {
+      background: linear-gradient(135deg,#667eea,#764ba2);
+      display: flex; align-items: center; justify-content: center; font-size: 18px;
+    }
+    .color-input-wrap { display: none; }
+    .color-input-wrap.visible { display: block; }
+    .color-input-wrap input[type="color"] {
+      width: 46px; height: 46px;
+      border: none; padding: 0; border-radius: 10px; cursor: pointer;
+    }
+
+    /* Effect toggles */
+    .effect-options { display: flex; gap: 8px; flex-wrap: wrap; }
+    .toggle-btn {
+      padding: 8px 16px;
+      border-radius: 20px;
+      border: 2px solid #ddd;
+      background: white;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: border-color .15s, background .15s, color .15s;
+      display: flex; align-items: center; gap: 5px;
+    }
+    .toggle-btn:hover { border-color: #aaa; }
+    .toggle-btn.active {
+      border-color: #ff4858;
+      background: #fff0f1;
+      color: #ff4858;
+    }
+
+    /* Size buttons */
+    .size-options { display: flex; gap: 8px; flex-wrap: wrap; }
+    .size-btn {
+      padding: 7px 14px;
+      border-radius: 20px;
+      border: 2px solid #ddd;
+      background: white;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: border-color .15s, background .15s, color .15s;
+    }
+    .size-btn:hover { border-color: #aaa; }
+    .size-btn.active {
+      border-color: #ff4858;
+      background: #fff0f1;
+      color: #ff4858;
+    }
+
+    /* ── Single workspace ── */
+    .workspace {
+      display: none;
+      gap: 20px;
+      margin-top: 20px;
+    }
+    .workspace.visible {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+    }
+    @media (max-width: 620px) { .workspace.visible { grid-template-columns: 1fr; } }
+
+    .panel {
+      background: white;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+    .panel-header {
+      padding: 11px 16px;
+      border-bottom: 1px solid #f0f0f0;
+      font-size: 13px;
+      font-weight: 600;
+      color: #666;
+    }
+    .canvas-wrap {
+      position: relative;
+      background: repeating-conic-gradient(#eee 0% 25%, white 0% 50%) 0 0 / 20px 20px;
+      aspect-ratio: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .canvas-wrap canvas, .canvas-wrap img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+    .processing-overlay {
+      display: none;
+      position: absolute;
+      inset: 0;
+      background: rgba(255,255,255,.88);
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      font-size: 14px;
+      color: #555;
+    }
+    .processing-overlay.visible { display: flex; }
+    .spinner {
+      width: 38px; height: 38px;
+      border: 4px solid #eee;
+      border-top-color: #ff4858;
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .progress-bar-wrap {
+      width: 160px; height: 6px;
+      background: #eee;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .progress-bar {
+      height: 100%;
+      background: #ff4858;
+      border-radius: 3px;
+      width: 0%;
+      transition: width .3s;
+    }
+
+    .actions {
+      padding: 14px 16px;
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    /* Buttons */
+    .btn {
+      padding: 10px 20px;
+      border-radius: 24px;
+      border: none;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity .15s, transform .1s;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn:hover { opacity: .85; }
+    .btn:active { transform: scale(.97); }
+    .btn:disabled { opacity: .35; cursor: not-allowed; }
+    .btn-primary { background: #ff4858; color: white; }
+    .btn-secondary { background: #f0f0f0; color: #333; }
+    .btn-green { background: #06c755; color: white; }
+    .btn-blue { background: #3b82f6; color: white; }
+
+    /* ── Batch workspace ── */
+    .batch-workspace {
+      display: none;
+      margin-top: 20px;
+    }
+    .batch-workspace.visible { display: block; }
+
+    .batch-header {
+      background: white;
+      border-radius: 16px;
+      padding: 16px 20px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .batch-count {
+      font-size: 15px;
+      font-weight: 700;
+      color: #333;
+      flex: 1;
+    }
+
+    .batch-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 12px;
+      margin-top: 16px;
+    }
+    .batch-card {
+      background: white;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      transition: box-shadow .2s;
+    }
+    .batch-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
+    .batch-thumb {
+      position: relative;
+      aspect-ratio: 1;
+      background: #f5f5f5;
+      overflow: hidden;
+    }
+    .batch-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .batch-thumb canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: none;
+    }
+    .batch-thumb canvas.visible { display: block; }
+    .batch-status-icon {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+    }
+    .batch-mini-spinner {
+      width: 20px; height: 20px;
+      border: 3px solid rgba(255,255,255,.6);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    .batch-card-info { padding: 8px 10px; }
+    .batch-card-name {
+      font-size: 11px;
+      color: #666;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-bottom: 4px;
+    }
+    .batch-card-status {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 8px;
+      display: inline-block;
+    }
+    .status-pending  { background: #f0f0f0; color: #888; }
+    .status-running  { background: #dbeafe; color: #1d4ed8; }
+    .status-done     { background: #dcfce7; color: #166534; }
+    .status-error    { background: #fee2e2; color: #991b1b; }
+
+    /* ── Tip ── */
+    .tip {
+      background: #fffbeb;
+      border: 1px solid #fde68a;
+      border-radius: 10px;
+      padding: 12px 16px;
+      font-size: 13px;
+      color: #92400e;
+      margin-top: 20px;
+      line-height: 1.6;
+    }
+    .tip strong { font-weight: 700; }
+  </style>
+</head>
+<body>
+
+<header>
+  <span style="font-size:24px">🛍️</span>
+  <h1>背景クリーナー</h1>
+  <span class="badge">メルカリ出品用</span>
+</header>
+
+<div class="container">
+
+  <!-- Upload -->
+  <div class="upload-area" id="uploadArea">
+    <input type="file" id="fileInput" accept="image/*" multiple>
+    <div class="upload-icon">📷</div>
+    <h2>商品画像をドロップ または クリックして選択</h2>
+    <p>JPG / PNG / WebP 対応 &nbsp;・&nbsp; 複数枚選択で一括処理</p>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls">
+
+    <!-- Background -->
+    <div class="ctrl-group">
+      <div class="ctrl-label">背景</div>
+      <div class="bg-options" id="bgOptions">
+        <!-- 白い布 (default) -->
+        <div class="bg-option active" data-bg="cloth" title="白い布（おすすめ）">
+          <canvas id="thumbCloth" width="46" height="46"></canvas>
+        </div>
+        <!-- 白大理石 -->
+        <div class="bg-option" data-bg="marble" title="白大理石">
+          <canvas id="thumbMarble" width="46" height="46"></canvas>
+        </div>
+        <!-- 純白 -->
+        <div class="bg-option" data-bg="white" style="background:#fff;border-color:#e0e0e0" title="白"></div>
+        <!-- ライトグレー -->
+        <div class="bg-option" data-bg="#efefef" style="background:#efefef" title="ライトグレー"></div>
+        <!-- クリーム -->
+        <div class="bg-option" data-bg="#fdf6ec" style="background:#fdf6ec" title="クリーム"></div>
+        <!-- 透明 -->
+        <div class="bg-option swatch-transparent" data-bg="transparent" title="透明（PNG出力）"></div>
+        <!-- カスタムカラー -->
+        <div class="bg-option swatch-rainbow" data-bg="custom-color" title="カスタムカラー">🎨</div>
+        <!-- 背景画像 -->
+        <div class="bg-option swatch-image" data-bg="custom-image" title="背景画像">🖼️</div>
+      </div>
+      <div class="color-input-wrap" id="colorInputWrap" style="margin-top:8px">
+        <input type="color" id="customColor" value="#ffffff">
+      </div>
+    </div>
+
+    <!-- Effects -->
+    <div class="ctrl-group">
+      <div class="ctrl-label">エフェクト</div>
+      <div class="effect-options">
+        <button class="toggle-btn" id="shadowToggle" data-on="false">
+          <span>🌑</span> シャドウ
+        </button>
+      </div>
+    </div>
+
+    <!-- Size -->
+    <div class="ctrl-group">
+      <div class="ctrl-label">出力サイズ</div>
+      <div class="size-options">
+        <button class="size-btn active" data-size="original">元サイズ</button>
+        <button class="size-btn" data-size="1000">1000px</button>
+        <button class="size-btn" data-size="1200">1200px</button>
+        <button class="size-btn" data-size="2000">2000px</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Single mode workspace -->
+  <div class="workspace" id="workspace">
+    <div class="panel">
+      <div class="panel-header">📥 元画像</div>
+      <div class="canvas-wrap">
+        <img id="origImg" alt="元画像">
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-header">✨ 処理後</div>
+      <div class="canvas-wrap">
+        <canvas id="resultCanvas"></canvas>
+        <div class="processing-overlay" id="processingOverlay">
+          <div class="spinner"></div>
+          <div id="processingText">AIが背景を除去中...</div>
+          <div class="progress-bar-wrap">
+            <div class="progress-bar" id="progressBar"></div>
+          </div>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-green" id="downloadBtn" disabled>⬇️ ダウンロード</button>
+        <button class="btn btn-secondary" id="newImageBtn">別の画像</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Batch mode workspace -->
+  <div class="batch-workspace" id="batchWorkspace">
+    <div class="batch-header">
+      <div class="batch-count" id="batchCount">0枚選択済み</div>
+      <button class="btn btn-primary" id="batchProcessBtn">⚡ すべて処理する</button>
+      <button class="btn btn-green" id="batchDownloadBtn" disabled>📦 ZIPでダウンロード</button>
+      <button class="btn btn-secondary" id="batchResetBtn">リセット</button>
+    </div>
+    <div class="batch-grid" id="batchGrid"></div>
+  </div>
+
+  <div class="tip">
+    💡 <strong>ヒント：</strong>
+    <strong>白い布</strong>背景はメルカリで最も人気のある設定です。大理石は高級感が出て衣類・アクセサリーに特に映えます。
+    シャドウを入れると商品に立体感が生まれます。背景除去はブラウザ内で完結し、画像はサーバーに送信されません。
+  </div>
+
+</div>
+
+<input type="file" id="bgImageInput" accept="image/*" style="display:none">
+
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  }
+</script>
+<script type="module">
+import { removeBackground } from 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.4.5/+esm';
+
+// ─── Texture generation ───────────────────────────────────────────────
+function makeClothTexture(size = 256) {
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#f9f8f5';
+  ctx.fillRect(0, 0, size, size);
+  const step = 7;
+  for (let y = 0; y < size; y += step) {
+    const thick = Math.floor(y / step) % 2 === 0;
+    ctx.strokeStyle = `rgba(182,175,165,${thick ? 0.22 : 0.11})`;
+    ctx.lineWidth = thick ? 1.3 : 0.7;
+    ctx.beginPath(); ctx.moveTo(0, y + 0.5); ctx.lineTo(size, y + 0.5); ctx.stroke();
+  }
+  for (let x = 0; x < size; x += step) {
+    const thick = Math.floor(x / step) % 2 === 0;
+    ctx.strokeStyle = `rgba(182,175,165,${thick ? 0.18 : 0.08})`;
+    ctx.lineWidth = thick ? 1.1 : 0.6;
+    ctx.beginPath(); ctx.moveTo(x + 0.5, 0); ctx.lineTo(x + 0.5, size); ctx.stroke();
+  }
+  // interlace dots
+  for (let y = 0; y < size; y += step) {
+    for (let x = 0; x < size; x += step) {
+      if ((Math.floor(x / step) + Math.floor(y / step)) % 2 === 0) {
+        ctx.fillStyle = 'rgba(175,168,158,0.13)';
+        ctx.fillRect(x + 1, y + 1, step / 2, step / 2);
+      }
+    }
+  }
+  return c;
+}
+
+function makeMarbleTexture(size = 1024) {
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const ctx = c.getContext('2d');
+  const grad = ctx.createLinearGradient(0, 0, size, size);
+  grad.addColorStop(0,   '#f6f2ed');
+  grad.addColorStop(0.5, '#faf7f3');
+  grad.addColorStop(1,   '#f2eeea');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, size, size);
+
+  function vein(x0, y0, x1, y1, w, alpha, depth) {
+    const mx = (x0 + x1) / 2 + (Math.random() - 0.45) * size * 0.35;
+    const my = (y0 + y1) / 2 + (Math.random() - 0.45) * size * 0.25;
+    ctx.beginPath();
+    ctx.strokeStyle = `rgba(155,145,135,${alpha})`;
+    ctx.lineWidth = w;
+    ctx.lineCap = 'round';
+    ctx.moveTo(x0, y0);
+    ctx.quadraticCurveTo(mx, my, x1, y1);
+    ctx.stroke();
+    if (depth > 0 && Math.random() > 0.4) {
+      const t = 0.25 + Math.random() * 0.5;
+      const bx = x0 + (x1 - x0) * t + (Math.random() - 0.5) * 60;
+      const by = y0 + (y1 - y0) * t + (Math.random() - 0.5) * 60;
+      vein(bx, by, bx + (Math.random() - 0.5) * size * 0.3, by + (Math.random() - 0.2) * size * 0.3, w * 0.45, alpha * 0.65, depth - 1);
+    }
+  }
+  // major veins
+  for (let i = 0; i < 5; i++) {
+    vein(Math.random() * size * 0.3, Math.random() * size,
+         size * 0.7 + Math.random() * size * 0.3, Math.random() * size,
+         1.5 + Math.random() * 2.5, 0.10 + Math.random() * 0.12, 2);
+  }
+  // minor veins
+  for (let i = 0; i < 10; i++) {
+    const sx = Math.random() * size, sy = Math.random() * size;
+    vein(sx, sy, sx + (Math.random() - 0.5) * size * 0.4, sy + (Math.random() - 0.3) * size * 0.4,
+         0.5 + Math.random() * 1.2, 0.05 + Math.random() * 0.08, 0);
+  }
+  // sheen
+  const sheen = ctx.createLinearGradient(0, 0, size * 0.8, size);
+  sheen.addColorStop(0,   'rgba(255,255,255,0)');
+  sheen.addColorStop(0.5, 'rgba(255,255,255,0.09)');
+  sheen.addColorStop(1,   'rgba(255,255,255,0)');
+  ctx.fillStyle = sheen;
+  ctx.fillRect(0, 0, size, size);
+  return c;
+}
+
+// ─── State ───────────────────────────────────────────────────────────
+let bgSetting       = 'cloth';
+let shadowEnabled   = false;
+let outputSize      = 'original';
+let customColorVal  = '#ffffff';
+let customBgImage   = null;
+let clothTexture    = null;
+let marbleTexture   = null;
+
+// Single mode
+let singleRemovedBlob = null;
+
+// Batch mode
+let batchQueue = []; // [{file, status, removedBlob, resultCanvas}]
+let batchProcessing = false;
+
+// ─── Init textures ────────────────────────────────────────────────────
+clothTexture  = makeClothTexture(256);
+marbleTexture = makeMarbleTexture(1024);
+
+function drawThumb(targetCanvas, srcCanvas) {
+  const ctx = targetCanvas.getContext('2d');
+  ctx.drawImage(srcCanvas, 0, 0, targetCanvas.width, targetCanvas.height);
+}
+drawThumb(document.getElementById('thumbCloth'),  clothTexture);
+drawThumb(document.getElementById('thumbMarble'), marbleTexture);
+
+// ─── DOM refs ─────────────────────────────────────────────────────────
+const fileInput        = document.getElementById('fileInput');
+const bgImageInput     = document.getElementById('bgImageInput');
+const uploadArea       = document.getElementById('uploadArea');
+const workspace        = document.getElementById('workspace');
+const origImg          = document.getElementById('origImg');
+const resultCanvas     = document.getElementById('resultCanvas');
+const processingOverlay= document.getElementById('processingOverlay');
+const processingText   = document.getElementById('processingText');
+const progressBar      = document.getElementById('progressBar');
+const downloadBtn      = document.getElementById('downloadBtn');
+const newImageBtn      = document.getElementById('newImageBtn');
+const colorInputWrap   = document.getElementById('colorInputWrap');
+const customColorInput = document.getElementById('customColor');
+const shadowToggle     = document.getElementById('shadowToggle');
+const batchWorkspace   = document.getElementById('batchWorkspace');
+const batchCount       = document.getElementById('batchCount');
+const batchProcessBtn  = document.getElementById('batchProcessBtn');
+const batchDownloadBtn = document.getElementById('batchDownloadBtn');
+const batchResetBtn    = document.getElementById('batchResetBtn');
+const batchGrid        = document.getElementById('batchGrid');
+
+// ─── Drag & drop ──────────────────────────────────────────────────────
+uploadArea.addEventListener('dragover', e => { e.preventDefault(); uploadArea.classList.add('drag-over'); });
+uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('drag-over'));
+uploadArea.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadArea.classList.remove('drag-over');
+  handleFiles(e.dataTransfer.files);
+});
+fileInput.addEventListener('change', () => handleFiles(fileInput.files));
+
+// ─── Background selection ─────────────────────────────────────────────
+document.querySelectorAll('.bg-option').forEach(el => {
+  el.addEventListener('click', () => {
+    const bg = el.dataset.bg;
+    if (bg === 'custom-image') { bgImageInput.click(); return; }
+    document.querySelectorAll('.bg-option').forEach(o => o.classList.remove('active'));
+    el.classList.add('active');
+    colorInputWrap.classList.toggle('visible', bg === 'custom-color');
+    bgSetting = bg === 'custom-color' ? customColorVal : bg;
+    reapplyAll();
+  });
+});
+
+customColorInput.addEventListener('input', () => {
+  customColorVal = customColorInput.value;
+  bgSetting = customColorVal;
+  reapplyAll();
+});
+
+bgImageInput.addEventListener('change', () => {
+  if (!bgImageInput.files.length) return;
+  const img = new Image();
+  img.onload = () => {
+    customBgImage = img;
+    bgSetting = 'custom-image';
+    document.querySelectorAll('.bg-option').forEach(o => o.classList.remove('active'));
+    document.querySelector('[data-bg="custom-image"]').classList.add('active');
+    colorInputWrap.classList.remove('visible');
+    reapplyAll();
+  };
+  img.src = URL.createObjectURL(bgImageInput.files[0]);
+});
+
+// ─── Shadow toggle ────────────────────────────────────────────────────
+shadowToggle.addEventListener('click', () => {
+  shadowEnabled = !shadowEnabled;
+  shadowToggle.classList.toggle('active', shadowEnabled);
+  shadowToggle.dataset.on = shadowEnabled;
+  reapplyAll();
+});
+
+// ─── Size buttons ─────────────────────────────────────────────────────
+document.querySelectorAll('.size-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.size-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    outputSize = btn.dataset.size;
+    reapplyAll();
+  });
+});
+
+// ─── Single mode buttons ──────────────────────────────────────────────
+newImageBtn.addEventListener('click', resetToUpload);
+downloadBtn.addEventListener('click', () => {
+  const ext = bgSetting === 'transparent' ? 'png' : 'jpg';
+  const mime = bgSetting === 'transparent' ? 'image/png' : 'image/jpeg';
+  triggerDownload(resultCanvas.toDataURL(mime, 0.95), `mercari_${Date.now()}.${ext}`);
+});
+
+// ─── Batch mode buttons ───────────────────────────────────────────────
+batchProcessBtn.addEventListener('click', batchProcessAll);
+batchDownloadBtn.addEventListener('click', batchDownloadZip);
+batchResetBtn.addEventListener('click', resetToUpload);
+
+// ─── Core: handle file selection ─────────────────────────────────────
+function handleFiles(fileList) {
+  const files = Array.from(fileList);
+  if (!files.length) return;
+
+  if (files.length === 1) {
+    // Single mode
+    uploadArea.style.display = 'none';
+    batchWorkspace.classList.remove('visible');
+    workspace.classList.add('visible');
+    startSingleProcess(files[0]);
+  } else {
+    // Batch mode
+    uploadArea.style.display = 'none';
+    workspace.classList.remove('visible');
+    batchWorkspace.classList.add('visible');
+    initBatch(files);
+  }
+}
+
+function resetToUpload() {
+  workspace.classList.remove('visible');
+  batchWorkspace.classList.remove('visible');
+  uploadArea.style.display = '';
+  singleRemovedBlob = null;
+  batchQueue = [];
+  batchGrid.innerHTML = '';
+  batchDownloadBtn.disabled = true;
+  batchProcessing = false;
+  fileInput.value = '';
+}
+
+// ─── Reapply background when settings change ─────────────────────────
+function reapplyAll() {
+  if (singleRemovedBlob && workspace.classList.contains('visible')) {
+    applyBackground(resultCanvas, singleRemovedBlob, null, false);
+  }
+  if (batchWorkspace.classList.contains('visible')) {
+    batchQueue.forEach((item, i) => {
+      if (item.status === 'done' && item.removedBlob) {
+        applyBackground(item.resultCanvas, item.removedBlob, null, false);
+      }
+    });
+  }
+}
+
+// ─── Single mode ──────────────────────────────────────────────────────
+async function startSingleProcess(file) {
+  singleRemovedBlob = null;
+  downloadBtn.disabled = true;
+  origImg.src = URL.createObjectURL(file);
+  processingOverlay.classList.add('visible');
+  progressBar.style.width = '0%';
+  processingText.textContent = 'AIモデルを読み込み中...';
+
+  try {
+    singleRemovedBlob = await runRemoveBg(file, (pct, phase) => {
+      progressBar.style.width = pct + '%';
+      processingText.textContent = phase === 'infer'
+        ? `背景を除去中... ${pct}%`
+        : 'AIモデルを読み込み中...';
+    });
+    await applyBackground(resultCanvas, singleRemovedBlob, processingOverlay, true);
+    downloadBtn.disabled = false;
+  } catch (err) {
+    processingText.textContent = 'エラー: ' + err.message;
+    console.error(err);
+  }
+}
+
+// ─── Batch mode ───────────────────────────────────────────────────────
+function initBatch(files) {
+  batchQueue = files.map(f => ({
+    file: f,
+    status: 'pending',
+    removedBlob: null,
+    resultCanvas: document.createElement('canvas')
+  }));
+  batchGrid.innerHTML = '';
+  batchDownloadBtn.disabled = true;
+  batchCount.textContent = `${files.length}枚選択済み`;
+  batchQueue.forEach((item, i) => {
+    const card = createBatchCard(item.file, i);
+    batchGrid.appendChild(card);
+    // preview original
+    const img = card.querySelector('.batch-orig-img');
+    img.src = URL.createObjectURL(item.file);
+  });
+}
+
+function createBatchCard(file, idx) {
+  const card = document.createElement('div');
+  card.className = 'batch-card';
+  card.id = `batch-card-${idx}`;
+  card.innerHTML = `
+    <div class="batch-thumb">
+      <img class="batch-orig-img" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover">
+      <canvas class="batch-result-canvas"></canvas>
+      <div class="batch-status-icon" id="batch-icon-${idx}"></div>
+    </div>
+    <div class="batch-card-info">
+      <div class="batch-card-name" title="${file.name}">${file.name}</div>
+      <div class="batch-card-status status-pending" id="batch-status-${idx}">待機中</div>
+    </div>
+  `;
+  const rc = card.querySelector('.batch-result-canvas');
+  batchQueue[idx].resultCanvas = rc;
+  rc.style.position = 'absolute';
+  rc.style.inset = '0';
+  rc.style.width = '100%';
+  rc.style.height = '100%';
+  rc.style.objectFit = 'contain';
+  return card;
+}
+
+async function batchProcessAll() {
+  if (batchProcessing) return;
+  batchProcessing = true;
+  batchProcessBtn.disabled = true;
+  batchDownloadBtn.disabled = true;
+
+  for (let i = 0; i < batchQueue.length; i++) {
+    const item = batchQueue[i];
+    if (item.status === 'done') continue;
+
+    setBatchStatus(i, 'running', '処理中');
+    setCountText(i);
+    try {
+      item.removedBlob = await runRemoveBg(item.file, () => {});
+      item.status = 'done';
+      // show result canvas
+      const rc = item.resultCanvas;
+      await applyBackground(rc, item.removedBlob, null, false);
+      rc.classList.add('visible');
+      setBatchStatus(i, 'done', '完了 ✓');
+      // show individual download icon
+      const icon = document.getElementById(`batch-icon-${i}`);
+      if (icon) {
+        icon.innerHTML = '<span style="background:rgba(6,199,85,.9);border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:13px;cursor:pointer" title="ダウンロード">⬇️</span>';
+        icon.querySelector('span').addEventListener('click', () => downloadBatchItem(i));
+      }
+    } catch (err) {
+      item.status = 'error';
+      setBatchStatus(i, 'error', 'エラー');
+    }
+  }
+
+  batchProcessing = false;
+  batchProcessBtn.disabled = false;
+  const allDone = batchQueue.every(it => it.status === 'done');
+  batchDownloadBtn.disabled = !allDone;
+  const doneCount = batchQueue.filter(it => it.status === 'done').length;
+  batchCount.textContent = `${doneCount}/${batchQueue.length}枚 完了`;
+}
+
+function setBatchStatus(idx, cls, label) {
+  const badge = document.getElementById(`batch-status-${idx}`);
+  const icon  = document.getElementById(`batch-icon-${idx}`);
+  if (badge) {
+    badge.className = `batch-card-status status-${cls}`;
+    badge.textContent = label;
+  }
+  if (icon && cls === 'running') {
+    icon.innerHTML = '<div class="batch-mini-spinner"></div>';
+  }
+}
+
+function setCountText(idx) {
+  const done = batchQueue.filter(it => it.status === 'done').length;
+  batchCount.textContent = `処理中 ${idx + 1}/${batchQueue.length}枚...`;
+}
+
+function downloadBatchItem(idx) {
+  const item = batchQueue[idx];
+  if (!item || item.status !== 'done') return;
+  const rc = item.resultCanvas;
+  const ext = bgSetting === 'transparent' ? 'png' : 'jpg';
+  const mime = bgSetting === 'transparent' ? 'image/png' : 'image/jpeg';
+  const name = item.file.name.replace(/\.[^.]+$/, '') + `_bg.${ext}`;
+  triggerDownload(rc.toDataURL(mime, 0.95), name);
+}
+
+async function batchDownloadZip() {
+  batchDownloadBtn.disabled = true;
+  batchDownloadBtn.textContent = '📦 ZIP作成中...';
+  const zip = new JSZip();
+  const folder = zip.folder('mercari_images');
+  const mime = bgSetting === 'transparent' ? 'image/png' : 'image/jpeg';
+  const ext  = bgSetting === 'transparent' ? 'png' : 'jpg';
+
+  batchQueue.forEach((item, i) => {
+    if (item.status !== 'done') return;
+    const dataUrl = item.resultCanvas.toDataURL(mime, 0.95);
+    const base64  = dataUrl.split(',')[1];
+    const name    = item.file.name.replace(/\.[^.]+$/, '') + `_bg.${ext}`;
+    folder.file(name, base64, { base64: true });
+  });
+
+  const blob = await zip.generateAsync({ type: 'blob' });
+  triggerDownload(URL.createObjectURL(blob), `mercari_${Date.now()}.zip`);
+  batchDownloadBtn.disabled = false;
+  batchDownloadBtn.textContent = '📦 ZIPでダウンロード';
+}
+
+// ─── Core: run background removal ────────────────────────────────────
+async function runRemoveBg(file, onProgress) {
+  return removeBackground(file, {
+    progress: (key, current, total) => {
+      const pct = total ? Math.round((current / total) * 100) : 0;
+      onProgress(pct, key === 'compute:inference' ? 'infer' : 'load');
+    },
+    output: { quality: 0.9, format: 'image/png' }
+  });
+}
+
+// ─── Core: composite fg onto background ──────────────────────────────
+async function applyBackground(targetCanvas, removedBlob, overlayEl, showOverlay) {
+  if (overlayEl && showOverlay) {
+    overlayEl.classList.add('visible');
+    const txt = overlayEl.querySelector('div:not(.spinner):not(.progress-bar-wrap)');
+    if (txt) txt.textContent = '背景を合成中...';
+  }
+
+  const fgImg = await loadImage(URL.createObjectURL(removedBlob));
+
+  const isSquareOutput = outputSize !== 'original';
+  const dim = isSquareOutput
+    ? { w: parseInt(outputSize), h: parseInt(outputSize) }
+    : { w: fgImg.naturalWidth, h: fgImg.naturalHeight };
+
+  targetCanvas.width  = dim.w;
+  targetCanvas.height = dim.h;
+  const ctx = targetCanvas.getContext('2d');
+  ctx.clearRect(0, 0, dim.w, dim.h);
+
+  // Background
+  if (bgSetting !== 'transparent') {
+    if (bgSetting === 'cloth' && clothTexture) {
+      const pat = ctx.createPattern(clothTexture, 'repeat');
+      ctx.fillStyle = pat;
+      ctx.fillRect(0, 0, dim.w, dim.h);
+    } else if (bgSetting === 'marble' && marbleTexture) {
+      ctx.drawImage(marbleTexture, 0, 0, dim.w, dim.h);
+    } else if (bgSetting === 'custom-image' && customBgImage) {
+      ctx.drawImage(customBgImage, 0, 0, dim.w, dim.h);
+    } else {
+      ctx.fillStyle = (bgSetting === 'custom-color') ? customColorVal : bgSetting;
+      ctx.fillRect(0, 0, dim.w, dim.h);
+    }
+  }
+
+  // Fit foreground
+  const scale = Math.min(dim.w / fgImg.naturalWidth, dim.h / fgImg.naturalHeight);
+  const fw = fgImg.naturalWidth  * scale;
+  const fh = fgImg.naturalHeight * scale;
+  const fx = (dim.w - fw) / 2;
+  const fy = (dim.h - fh) / 2;
+
+  // Shadow
+  if (shadowEnabled) {
+    ctx.shadowColor   = 'rgba(0,0,0,0.28)';
+    ctx.shadowBlur    = Math.round(fh * 0.07);
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = Math.round(fh * 0.045);
+  }
+
+  ctx.drawImage(fgImg, fx, fy, fw, fh);
+
+  ctx.shadowColor   = 'transparent';
+  ctx.shadowBlur    = 0;
+  ctx.shadowOffsetY = 0;
+
+  if (overlayEl) overlayEl.classList.remove('visible');
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload  = () => { URL.revokeObjectURL(src); resolve(img); };
+    img.onerror = reject;
+    img.src = src;
+  });
+}
+
+function triggerDownload(href, filename) {
+  const a = document.createElement('a');
+  a.href = href;
+  a.download = filename;
+  a.click();
+}
+</script>
+</body>
+</html>
