@@ -672,14 +672,14 @@ let clothTexture    = null;
 let marbleTexture   = null;
 
 // Single mode
-let singleRemovedBlob = null;
+let singleFgImage = null; // HTMLImageElement（背景除去済み前景）
 
 // Batch mode
-let batchQueue = []; // [{file, status, removedBlob, resultCanvas}]
+let batchQueue = []; // [{file, status, fgImage, resultCanvas}]
 let batchProcessing = false;
 
 // ─── Init textures ────────────────────────────────────────────────────
-clothTexture  = makeClothTexture(256);
+clothTexture  = makeClothTexture(1024);
 marbleTexture = makeMarbleTexture(1024);
 
 function drawThumb(targetCanvas, srcCanvas) {
@@ -809,7 +809,7 @@ function resetToUpload() {
   workspace.classList.remove('visible');
   batchWorkspace.classList.remove('visible');
   uploadArea.style.display = '';
-  singleRemovedBlob = null;
+  singleFgImage = null;
   batchQueue = [];
   batchGrid.innerHTML = '';
   batchDownloadBtn.disabled = true;
@@ -819,13 +819,13 @@ function resetToUpload() {
 
 // ─── Reapply background when settings change ─────────────────────────
 function reapplyAll() {
-  if (singleRemovedBlob && workspace.classList.contains('visible')) {
-    applyBackground(resultCanvas, singleRemovedBlob, null, false);
+  if (singleFgImage && workspace.classList.contains('visible')) {
+    compositeImage(resultCanvas, singleFgImage, null, false);
   }
   if (batchWorkspace.classList.contains('visible')) {
-    batchQueue.forEach((item, i) => {
-      if (item.status === 'done' && item.removedBlob) {
-        applyBackground(item.resultCanvas, item.removedBlob, null, false);
+    batchQueue.forEach(item => {
+      if (item.status === 'done' && item.fgImage) {
+        compositeImage(item.resultCanvas, item.fgImage, null, false);
       }
     });
   }
@@ -833,7 +833,7 @@ function reapplyAll() {
 
 // ─── Single mode ──────────────────────────────────────────────────────
 async function startSingleProcess(file) {
-  singleRemovedBlob = null;
+  singleFgImage = null;
   downloadBtn.disabled = true;
   origImg.src = URL.createObjectURL(file);
   processingOverlay.classList.add('visible');
@@ -841,13 +841,14 @@ async function startSingleProcess(file) {
   processingText.textContent = 'AIモデルを読み込み中...';
 
   try {
-    singleRemovedBlob = await runRemoveBg(file, (pct, phase) => {
+    const blob = await runRemoveBg(file, (pct, phase) => {
       progressBar.style.width = pct + '%';
       processingText.textContent = phase === 'infer'
         ? `背景を除去中... ${pct}%`
         : 'AIモデルを読み込み中...';
     });
-    await applyBackground(resultCanvas, singleRemovedBlob, processingOverlay, true);
+    singleFgImage = await blobToImage(blob);
+    await compositeImage(resultCanvas, singleFgImage, processingOverlay, true);
     downloadBtn.disabled = false;
   } catch (err) {
     processingText.textContent = 'エラー: ' + err.message;
@@ -913,11 +914,11 @@ async function batchProcessAll() {
     setBatchStatus(i, 'running', '処理中');
     setCountText(i);
     try {
-      item.removedBlob = await runRemoveBg(item.file, () => {});
+      const blob = await runRemoveBg(item.file, () => {});
+      item.fgImage = await blobToImage(blob);
       item.status = 'done';
-      // show result canvas
       const rc = item.resultCanvas;
-      await applyBackground(rc, item.removedBlob, null, false);
+      await compositeImage(rc, item.fgImage, null, false);
       rc.classList.add('visible');
       setBatchStatus(i, 'done', '完了 ✓');
       // show individual download icon
@@ -1001,15 +1002,24 @@ async function runRemoveBg(file, onProgress) {
   });
 }
 
+// ─── BlobをHTMLImageElementに変換（一度だけ）────────────────────────
+function blobToImage(blob) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload  = () => { URL.revokeObjectURL(url); resolve(img); };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
 // ─── Core: composite fg onto background ──────────────────────────────
-async function applyBackground(targetCanvas, removedBlob, overlayEl, showOverlay) {
+async function compositeImage(targetCanvas, fgImg, overlayEl, showOverlay) {
   if (overlayEl && showOverlay) {
     overlayEl.classList.add('visible');
     const txt = overlayEl.querySelector('div:not(.spinner):not(.progress-bar-wrap)');
     if (txt) txt.textContent = '背景を合成中...';
   }
-
-  const fgImg = await loadImage(URL.createObjectURL(removedBlob));
 
   const isSquareOutput = outputSize !== 'original';
   const dim = isSquareOutput
@@ -1060,15 +1070,6 @@ async function applyBackground(targetCanvas, removedBlob, overlayEl, showOverlay
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────
-function loadImage(src) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload  = () => { URL.revokeObjectURL(src); resolve(img); };
-    img.onerror = reject;
-    img.src = src;
-  });
-}
-
 function triggerDownload(href, filename) {
   const a = document.createElement('a');
   a.href = href;
