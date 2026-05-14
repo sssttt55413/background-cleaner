@@ -391,7 +391,7 @@
 
   <!-- Upload -->
   <label class="upload-area" id="uploadArea" for="fileInput">
-    <input type="file" id="fileInput" accept="image/*" multiple style="position:absolute;width:1px;height:1px;opacity:0.01;top:0;left:0;overflow:hidden">
+    <input type="file" id="fileInput" accept="image/*" multiple style="position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer">
     <div class="upload-icon">📷</div>
     <h2>商品画像を選択</h2>
     <p>JPG / PNG / WebP 対応 &nbsp;・&nbsp; 複数枚選択で一括処理</p>
@@ -517,70 +517,48 @@ function makeClothTexture(size = 1024) {
   const ctx = c.getContext('2d');
 
   // ピュアホワイトベース
-  ctx.fillStyle = '#f8f8f8';
+  ctx.fillStyle = '#f7f7f7';
   ctx.fillRect(0, 0, size, size);
 
-  // 全体の光源グラデーション（左上から柔らかく当たる光）
-  const ambient = ctx.createLinearGradient(0, 0, size * 0.6, size);
-  ambient.addColorStop(0,   'rgba(255,255,255,0.22)');
-  ambient.addColorStop(0.5, 'rgba(240,240,245,0.05)');
-  ambient.addColorStop(1,   'rgba(210,212,220,0.10)');
-  ctx.fillStyle = ambient;
+  // 光源グラデーション（左上）
+  const light = ctx.createLinearGradient(0, 0, size * 0.55, size);
+  light.addColorStop(0,   'rgba(255,255,255,0.22)');
+  light.addColorStop(0.5, 'rgba(245,245,248,0.06)');
+  light.addColorStop(1,   'rgba(210,213,222,0.10)');
+  ctx.fillStyle = light;
   ctx.fillRect(0, 0, size, size);
 
-  // 布のドレープ（ヒダ）パラメータ
-  // y:縦位置, amp:振れ幅, phase:位相, sw:影の幅, sa:影の濃さ, ha:ハイライト濃さ
+  // ctx.filter を使わずに縦ストリップ×グラデーションでドレープを描く
+  const STRIP = 5;
   const folds = [
-    { y: 0.13, amp: 0.055, phase: 0.5,  sw: 110, sa: 0.13, ha: 0.10 },
-    { y: 0.29, amp: 0.090, phase: 1.3,  sw: 140, sa: 0.20, ha: 0.15 },
-    { y: 0.46, amp: 0.070, phase: 0.9,  sw: 120, sa: 0.17, ha: 0.13 },
-    { y: 0.61, amp: 0.100, phase: 0.2,  sw: 150, sa: 0.22, ha: 0.16 },
-    { y: 0.77, amp: 0.060, phase: 1.7,  sw: 105, sa: 0.14, ha: 0.11 },
-    { y: 0.91, amp: 0.045, phase: 0.6,  sw:  90, sa: 0.11, ha: 0.09 },
+    { cy: 0.13, amp: 0.055, ph: 0.5,  bw: 0.10, sa: 0.17, ha: 0.13 },
+    { cy: 0.29, amp: 0.085, ph: 1.2,  bw: 0.13, sa: 0.23, ha: 0.17 },
+    { cy: 0.46, amp: 0.070, ph: 0.9,  bw: 0.11, sa: 0.19, ha: 0.14 },
+    { cy: 0.62, amp: 0.095, ph: 0.3,  bw: 0.14, sa: 0.25, ha: 0.18 },
+    { cy: 0.78, amp: 0.060, ph: 1.6,  bw: 0.09, sa: 0.16, ha: 0.12 },
+    { cy: 0.91, amp: 0.045, ph: 0.7,  bw: 0.08, sa: 0.13, ha: 0.10 },
   ];
 
-  folds.forEach(fold => {
-    const baseY = fold.y * size;
-    const amp   = fold.amp * size;
-
-    // x座標から布の湾曲Y座標を計算
-    const foldY = (x, offset = 0) =>
-      baseY + Math.sin((x / size) * Math.PI * 1.6 + fold.phase) * amp + offset;
-
-    // ── 影（谷）──
-    ctx.save();
-    ctx.filter = `blur(${Math.round(fold.sw * 0.55)}px)`;
-    ctx.beginPath();
-    for (let x = 0; x <= size; x += 3) {
-      x === 0 ? ctx.moveTo(x, foldY(x)) : ctx.lineTo(x, foldY(x));
+  for (const fold of folds) {
+    const bh = fold.bw * size;
+    for (let x = 0; x <= size; x += STRIP) {
+      const cy = (fold.cy + Math.sin(x / size * Math.PI * 1.8 + fold.ph) * fold.amp) * size;
+      const y0 = cy - bh * 1.1;
+      const y1 = cy + bh * 1.1;
+      const sg = ctx.createLinearGradient(0, y0, 0, y1);
+      sg.addColorStop(0,    'rgba(255,255,255,0)');
+      sg.addColorStop(0.30, `rgba(255,255,255,${fold.ha})`);   // 稜線ハイライト
+      sg.addColorStop(0.62, `rgba(145,152,168,${fold.sa})`);   // 谷の影
+      sg.addColorStop(1,    'rgba(255,255,255,0)');
+      ctx.fillStyle = sg;
+      ctx.fillRect(x, y0, STRIP, y1 - y0);
     }
-    ctx.strokeStyle = `rgba(155,162,178,${fold.sa})`;
-    ctx.lineWidth   = fold.sw;
-    ctx.lineCap     = 'round';
-    ctx.stroke();
-    ctx.restore();
+  }
 
-    // ── ハイライト（稜線）──
-    ctx.save();
-    ctx.filter = `blur(${Math.round(fold.sw * 0.28)}px)`;
-    ctx.beginPath();
-    const hlOff = -fold.sw * 0.42;
-    for (let x = 0; x <= size; x += 3) {
-      x === 0 ? ctx.moveTo(x, foldY(x, hlOff)) : ctx.lineTo(x, foldY(x, hlOff));
-    }
-    ctx.strokeStyle = `rgba(255,255,255,${fold.ha})`;
-    ctx.lineWidth   = fold.sw * 0.42;
-    ctx.lineCap     = 'round';
-    ctx.stroke();
-    ctx.restore();
-  });
-
-  ctx.filter = 'none';
-
-  // 仕上げ：絹のような光沢
-  const sheen = ctx.createLinearGradient(0, 0, size * 0.45, size * 0.45);
-  sheen.addColorStop(0,   'rgba(255,255,255,0.20)');
-  sheen.addColorStop(0.6, 'rgba(255,255,255,0.04)');
+  // 絹のような光沢
+  const sheen = ctx.createLinearGradient(0, 0, size * 0.42, size * 0.42);
+  sheen.addColorStop(0,   'rgba(255,255,255,0.22)');
+  sheen.addColorStop(0.7, 'rgba(255,255,255,0.04)');
   sheen.addColorStop(1,   'rgba(255,255,255,0.0)');
   ctx.fillStyle = sheen;
   ctx.fillRect(0, 0, size, size);
