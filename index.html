@@ -103,7 +103,7 @@
       overflow: hidden;
       flex-shrink: 0;
     }
-    .bg-option canvas { width: 100%; height: 100%; display: block; }
+
     .bg-option:hover { transform: scale(1.1); }
     .bg-option.active { border-color: #ff4858; }
     .bg-option.swatch-transparent {
@@ -139,25 +139,6 @@
     }
     .toggle-btn:hover { border-color: #aaa; }
     .toggle-btn.active {
-      border-color: #ff4858;
-      background: #fff0f1;
-      color: #ff4858;
-    }
-
-    /* Size buttons */
-    .size-options { display: flex; gap: 8px; flex-wrap: wrap; }
-    .size-btn {
-      padding: 7px 14px;
-      border-radius: 20px;
-      border: 2px solid #ddd;
-      background: white;
-      font-size: 12px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: border-color .15s, background .15s, color .15s;
-    }
-    .size-btn:hover { border-color: #aaa; }
-    .size-btn.active {
       border-color: #ff4858;
       background: #fff0f1;
       color: #ff4858;
@@ -365,18 +346,6 @@
     .status-done     { background: #dcfce7; color: #166534; }
     .status-error    { background: #fee2e2; color: #991b1b; }
 
-    /* ── Tip ── */
-    .tip {
-      background: #fffbeb;
-      border: 1px solid #fde68a;
-      border-radius: 10px;
-      padding: 12px 16px;
-      font-size: 13px;
-      color: #92400e;
-      margin-top: 20px;
-      line-height: 1.6;
-    }
-    .tip strong { font-weight: 700; }
   </style>
 </head>
 <body>
@@ -406,13 +375,14 @@
       <div class="ctrl-label">背景</div>
       <div class="bg-options" id="bgOptions">
         <!-- 白い布 (default) -->
-        <div class="bg-option active" data-bg="cloth" title="白い布（おすすめ）">
-          <canvas id="thumbCloth" width="46" height="46"></canvas>
-        </div>
+        <div class="bg-option active" data-bg="cloth" title="白い布（おすすめ）"
+          style="background:url('https://images.unsplash.com/photo-1756068785746-8aa1a82d2d1d?w=200&q=70&auto=format&fit=crop') center/cover"></div>
         <!-- 白大理石 -->
-        <div class="bg-option" data-bg="marble" title="白大理石">
-          <canvas id="thumbMarble" width="46" height="46"></canvas>
-        </div>
+        <div class="bg-option" data-bg="marble" title="白大理石"
+          style="background:url('https://images.unsplash.com/photo-1566041510394-cf7c8fe21800?w=200&q=70&auto=format&fit=crop') center/cover"></div>
+        <!-- 黒い布 -->
+        <div class="bg-option" data-bg="blackcloth" title="黒い布"
+          style="background:url('https://images.unsplash.com/photo-1675784332655-675d1a1ddcf6?w=200&q=70&auto=format&fit=crop') center/cover"></div>
         <!-- 純白 -->
         <div class="bg-option" data-bg="white" style="background:#fff;border-color:#e0e0e0" title="白"></div>
         <!-- ライトグレー -->
@@ -441,16 +411,6 @@
       </div>
     </div>
 
-    <!-- Size -->
-    <div class="ctrl-group">
-      <div class="ctrl-label">出力サイズ</div>
-      <div class="size-options">
-        <button class="size-btn active" data-size="original">元サイズ</button>
-        <button class="size-btn" data-size="1000">1000px</button>
-        <button class="size-btn" data-size="1200">1200px</button>
-        <button class="size-btn" data-size="2000">2000px</button>
-      </div>
-    </div>
 
   </div>
 
@@ -492,11 +452,6 @@
     <div class="batch-grid" id="batchGrid"></div>
   </div>
 
-  <div class="tip">
-    💡 <strong>ヒント：</strong>
-    <strong>白い布</strong>背景はメルカリで最も人気のある設定です。大理石は高級感が出て衣類・アクセサリーに特に映えます。
-    シャドウを入れると商品に立体感が生まれます。背景除去はブラウザ内で完結し、画像はサーバーに送信されません。
-  </div>
 
 </div>
 
@@ -510,184 +465,42 @@
 </script>
 <script type="module">
 
-// ─── Texture generation ───────────────────────────────────────────────
-function makeClothTexture(size = 1024) {
-  const c = document.createElement('canvas');
-  c.width = c.height = size;
-  const ctx = c.getContext('2d');
-
-  // ピュアホワイトベース
-  ctx.fillStyle = '#f7f7f7';
-  ctx.fillRect(0, 0, size, size);
-
-  // 光源グラデーション（左上）
-  const light = ctx.createLinearGradient(0, 0, size * 0.55, size);
-  light.addColorStop(0,   'rgba(255,255,255,0.22)');
-  light.addColorStop(0.5, 'rgba(245,245,248,0.06)');
-  light.addColorStop(1,   'rgba(210,213,222,0.10)');
-  ctx.fillStyle = light;
-  ctx.fillRect(0, 0, size, size);
-
-  // ctx.filter を使わずに縦ストリップ×グラデーションでドレープを描く
-  const STRIP = 5;
-  const folds = [
-    { cy: 0.13, amp: 0.055, ph: 0.5,  bw: 0.10, sa: 0.17, ha: 0.13 },
-    { cy: 0.29, amp: 0.085, ph: 1.2,  bw: 0.13, sa: 0.23, ha: 0.17 },
-    { cy: 0.46, amp: 0.070, ph: 0.9,  bw: 0.11, sa: 0.19, ha: 0.14 },
-    { cy: 0.62, amp: 0.095, ph: 0.3,  bw: 0.14, sa: 0.25, ha: 0.18 },
-    { cy: 0.78, amp: 0.060, ph: 1.6,  bw: 0.09, sa: 0.16, ha: 0.12 },
-    { cy: 0.91, amp: 0.045, ph: 0.7,  bw: 0.08, sa: 0.13, ha: 0.10 },
-  ];
-
-  for (const fold of folds) {
-    const bh = fold.bw * size;
-    for (let x = 0; x <= size; x += STRIP) {
-      const cy = (fold.cy + Math.sin(x / size * Math.PI * 1.8 + fold.ph) * fold.amp) * size;
-      const y0 = cy - bh * 1.1;
-      const y1 = cy + bh * 1.1;
-      const sg = ctx.createLinearGradient(0, y0, 0, y1);
-      sg.addColorStop(0,    'rgba(255,255,255,0)');
-      sg.addColorStop(0.30, `rgba(255,255,255,${fold.ha})`);   // 稜線ハイライト
-      sg.addColorStop(0.62, `rgba(145,152,168,${fold.sa})`);   // 谷の影
-      sg.addColorStop(1,    'rgba(255,255,255,0)');
-      ctx.fillStyle = sg;
-      ctx.fillRect(x, y0, STRIP, y1 - y0);
-    }
-  }
-
-  // 絹のような光沢
-  const sheen = ctx.createLinearGradient(0, 0, size * 0.42, size * 0.42);
-  sheen.addColorStop(0,   'rgba(255,255,255,0.22)');
-  sheen.addColorStop(0.7, 'rgba(255,255,255,0.04)');
-  sheen.addColorStop(1,   'rgba(255,255,255,0.0)');
-  ctx.fillStyle = sheen;
-  ctx.fillRect(0, 0, size, size);
-
-  return c;
-}
-
-function makeMarbleTexture(size = 1024) {
-  const c = document.createElement('canvas');
-  c.width = c.height = size;
-  const ctx = c.getContext('2d');
-
-  // ベース：温かみのある白
-  const base = ctx.createLinearGradient(0, 0, size, size);
-  base.addColorStop(0,    '#f7f4ef');
-  base.addColorStop(0.35, '#faf8f5');
-  base.addColorStop(0.7,  '#f5f2ec');
-  base.addColorStop(1,    '#f8f5f0');
-  ctx.fillStyle = base;
-  ctx.fillRect(0, 0, size, size);
-
-  // 石目（ベイン）を多点折れ線で描く
-  function vein(x0, y0, x1, y1, w, alpha, depth) {
-    const steps = 30;
-    const pts = [[x0, y0]];
-    for (let i = 1; i <= steps; i++) {
-      const t = i / steps;
-      const jitter = size * 0.12 * Math.sin(t * Math.PI);
-      pts.push([
-        x0 + (x1 - x0) * t + (Math.random() - 0.5) * jitter,
-        y0 + (y1 - y0) * t + (Math.random() - 0.5) * size * 0.06
-      ]);
-    }
-    // 太いアウトライン（柔らかい影）
-    ctx.beginPath();
-    ctx.strokeStyle = `rgba(130,118,105,${alpha * 0.35})`;
-    ctx.lineWidth = w + 2;
-    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    ctx.moveTo(pts[0][0], pts[0][1]);
-    pts.slice(1).forEach(p => ctx.lineTo(p[0], p[1]));
-    ctx.stroke();
-    // 本線
-    ctx.beginPath();
-    ctx.strokeStyle = `rgba(148,136,122,${alpha})`;
-    ctx.lineWidth = w;
-    ctx.moveTo(pts[0][0], pts[0][1]);
-    pts.slice(1).forEach(p => ctx.lineTo(p[0], p[1]));
-    ctx.stroke();
-    // ハイライト（石の光沢）
-    ctx.beginPath();
-    ctx.strokeStyle = `rgba(255,255,255,${alpha * 0.5})`;
-    ctx.lineWidth = w * 0.3;
-    ctx.moveTo(pts[0][0], pts[0][1]);
-    pts.slice(1).forEach(p => ctx.lineTo(p[0], p[1]));
-    ctx.stroke();
-
-    if (depth > 0 && Math.random() > 0.35) {
-      const bi = Math.floor(8 + Math.random() * 14);
-      if (bi < pts.length) {
-        const [bx, by] = pts[bi];
-        vein(bx, by,
-          bx + (Math.random() - 0.4) * size * 0.3,
-          by + (Math.random() - 0.4) * size * 0.3,
-          w * 0.45, alpha * 0.65, depth - 1);
-      }
-    }
-  }
-
-  // メインの太い石目（3〜4本）
-  for (let i = 0; i < 4; i++) {
-    vein(
-      Math.random() * size * 0.25, Math.random() * size,
-      size * 0.75 + Math.random() * size * 0.25, Math.random() * size,
-      2.5 + Math.random() * 3, 0.22 + Math.random() * 0.14, 2
-    );
-  }
-  // 細い石目（6本）
-  for (let i = 0; i < 6; i++) {
-    const sx = Math.random() * size, sy = Math.random() * size;
-    vein(sx, sy,
-      sx + (Math.random() - 0.5) * size * 0.55,
-      sy + (Math.random() - 0.3) * size * 0.55,
-      0.8 + Math.random() * 1.5, 0.10 + Math.random() * 0.10, 1);
-  }
-  // 極細の毛細石目（10本）
-  for (let i = 0; i < 10; i++) {
-    const sx = Math.random() * size, sy = Math.random() * size;
-    vein(sx, sy,
-      sx + (Math.random() - 0.5) * size * 0.25,
-      sy + (Math.random() - 0.5) * size * 0.25,
-      0.3 + Math.random() * 0.6, 0.05 + Math.random() * 0.05, 0);
-  }
-
-  // 光沢グラデーション
-  const sheen = ctx.createLinearGradient(0, 0, size * 0.7, size);
-  sheen.addColorStop(0,    'rgba(255,255,255,0.0)');
-  sheen.addColorStop(0.4,  'rgba(255,255,255,0.14)');
-  sheen.addColorStop(1,    'rgba(255,255,255,0.0)');
-  ctx.fillStyle = sheen;
-  ctx.fillRect(0, 0, size, size);
-  return c;
-}
-
 // ─── State ───────────────────────────────────────────────────────────
 let bgSetting       = 'cloth';
 let shadowEnabled   = false;
-let outputSize      = 'original';
 let customColorVal  = '#ffffff';
 let customBgImage   = null;
 let clothTexture    = null;
 let marbleTexture   = null;
+let blackclothTexture = null;
 
 // Single mode
-let singleFgImage = null; // HTMLImageElement（背景除去済み前景）
+let singleFgImage = null;
 
 // Batch mode
-let batchQueue = []; // [{file, status, fgImage, resultCanvas}]
+let batchQueue = [];
 let batchProcessing = false;
 
-// ─── Init textures ────────────────────────────────────────────────────
-clothTexture  = makeClothTexture(1024);
-marbleTexture = makeMarbleTexture(1024);
-
-function drawThumb(targetCanvas, srcCanvas) {
-  const ctx = targetCanvas.getContext('2d');
-  ctx.drawImage(srcCanvas, 0, 0, targetCanvas.width, targetCanvas.height);
+// ─── Load real photo textures ─────────────────────────────────────────
+function loadTexture(url) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload  = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
 }
-drawThumb(document.getElementById('thumbCloth'),  clothTexture);
-drawThumb(document.getElementById('thumbMarble'), marbleTexture);
+
+Promise.all([
+  loadTexture('https://images.unsplash.com/photo-1756068785746-8aa1a82d2d1d?w=1600&q=85&auto=format&fit=crop'),
+  loadTexture('https://images.unsplash.com/photo-1566041510394-cf7c8fe21800?w=1600&q=85&auto=format&fit=crop'),
+  loadTexture('https://images.unsplash.com/photo-1675784332655-675d1a1ddcf6?w=1600&q=85&auto=format&fit=crop'),
+]).then(([cloth, marble, blackcloth]) => {
+  clothTexture      = cloth;
+  marbleTexture     = marble;
+  blackclothTexture = blackcloth;
+});
 
 // ─── DOM refs ─────────────────────────────────────────────────────────
 const fileInput        = document.getElementById('fileInput');
@@ -760,16 +573,6 @@ shadowToggle.addEventListener('click', () => {
   shadowToggle.classList.toggle('active', shadowEnabled);
   shadowToggle.dataset.on = shadowEnabled;
   reapplyAll();
-});
-
-// ─── Size buttons ─────────────────────────────────────────────────────
-document.querySelectorAll('.size-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.size-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    outputSize = btn.dataset.size;
-    reapplyAll();
-  });
 });
 
 // ─── Single mode buttons ──────────────────────────────────────────────
@@ -1021,10 +824,7 @@ async function compositeImage(targetCanvas, fgImg, overlayEl, showOverlay) {
     if (txt) txt.textContent = '背景を合成中...';
   }
 
-  const isSquareOutput = outputSize !== 'original';
-  const dim = isSquareOutput
-    ? { w: parseInt(outputSize), h: parseInt(outputSize) }
-    : { w: fgImg.naturalWidth, h: fgImg.naturalHeight };
+  const dim = { w: fgImg.naturalWidth, h: fgImg.naturalHeight };
 
   targetCanvas.width  = dim.w;
   targetCanvas.height = dim.h;
@@ -1037,6 +837,8 @@ async function compositeImage(targetCanvas, fgImg, overlayEl, showOverlay) {
       ctx.drawImage(clothTexture, 0, 0, dim.w, dim.h);
     } else if (bgSetting === 'marble' && marbleTexture) {
       ctx.drawImage(marbleTexture, 0, 0, dim.w, dim.h);
+    } else if (bgSetting === 'blackcloth' && blackclothTexture) {
+      ctx.drawImage(blackclothTexture, 0, 0, dim.w, dim.h);
     } else if (bgSetting === 'custom-image' && customBgImage) {
       ctx.drawImage(customBgImage, 0, 0, dim.w, dim.h);
     } else {
