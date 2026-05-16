@@ -41,6 +41,7 @@
 
     /* ── Upload area ── */
     .upload-area {
+      display: block;
       border: 2px dashed #ccc;
       border-radius: 16px;
       background: white;
@@ -376,7 +377,7 @@
       <div class="bg-options" id="bgOptions">
         <!-- 白い布 (default) -->
         <div class="bg-option active" data-bg="cloth" title="白い布（おすすめ）"
-          style="background:url('https://images.unsplash.com/photo-1741173826628-199d13c4914a?w=200&q=70&auto=format&fit=crop') center/cover"></div>
+          style="background:url('https://images.unsplash.com/photo-1746399565180-0dfbfba51c2b?w=200&q=70&auto=format&fit=crop') center/cover"></div>
         <!-- 白大理石 -->
         <div class="bg-option" data-bg="marble" title="白大理石"
           style="background:url('https://images.unsplash.com/photo-1566041510394-cf7c8fe21800?w=200&q=70&auto=format&fit=crop') center/cover"></div>
@@ -493,7 +494,7 @@ function loadTexture(url) {
 }
 
 Promise.all([
-  loadTexture('https://images.unsplash.com/photo-1741173826628-199d13c4914a?w=1600&q=85&auto=format&fit=crop'),
+  loadTexture('https://images.unsplash.com/photo-1746399565180-0dfbfba51c2b?w=1600&q=85&auto=format&fit=crop'),
   loadTexture('https://images.unsplash.com/photo-1566041510394-cf7c8fe21800?w=1600&q=85&auto=format&fit=crop'),
   loadTexture('https://images.unsplash.com/photo-1675784332655-675d1a1ddcf6?w=1600&q=85&auto=format&fit=crop'),
 ]).then(([cloth, marble, blackcloth]) => {
