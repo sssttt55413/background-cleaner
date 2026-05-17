@@ -1,4 +1,4 @@
-const CACHE = 'bg-cleaner-v4';
+const CACHE = 'bg-cleaner-v5';
 const PRECACHE = ['./', './index.html', './manifest.json'];
 
 self.addEventListener('install', e => {

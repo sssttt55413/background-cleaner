@@ -248,6 +248,31 @@
     .btn-green { background: #06c755; color: white; }
     .btn-blue { background: #3b82f6; color: white; }
 
+    /* ── Edit toolbar ── */
+    .edit-toolbar {
+      display: none;
+      padding: 10px 16px;
+      background: #f0f4ff;
+      border-top: 1px solid #d0d8f0;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .edit-toolbar.visible { display: flex; }
+    .edit-toolbar .label { font-size: 12px; font-weight: 700; color: #555; margin-right: 2px; }
+    .brush-btn {
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      border: 2px solid #ccc;
+      background: white;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: border-color .15s;
+      flex-shrink: 0;
+    }
+    .brush-btn.active { border-color: #ff4858; }
+    .canvas-wrap.edit-mode { cursor: crosshair; }
+
     /* ── Batch workspace ── */
     .batch-workspace {
       display: none;
@@ -377,7 +402,7 @@
       <div class="bg-options" id="bgOptions">
         <!-- 白い布 (default) -->
         <div class="bg-option active" data-bg="cloth" title="白い布（おすすめ）"
-          style="background:url('https://images.unsplash.com/photo-1746399565180-0dfbfba51c2b?w=200&q=70&auto=format&fit=crop') center/cover"></div>
+          style="background:url('https://images.pexels.com/photos/7717488/pexels-photo-7717488.jpeg?auto=compress&cs=tinysrgb&w=200') center/cover"></div>
         <!-- 白大理石 -->
         <div class="bg-option" data-bg="marble" title="白大理石"
           style="background:url('https://images.unsplash.com/photo-1566041510394-cf7c8fe21800?w=200&q=70&auto=format&fit=crop') center/cover"></div>
@@ -435,8 +460,24 @@
           </div>
         </div>
       </div>
+      <div class="edit-toolbar" id="editToolbar">
+        <span class="label">消しゴム</span>
+        <button class="brush-btn active" data-brush="15" title="小">
+          <svg width="8" height="8"><circle cx="4" cy="4" r="4" fill="#333"/></svg>
+        </button>
+        <button class="brush-btn" data-brush="30" title="中">
+          <svg width="14" height="14"><circle cx="7" cy="7" r="7" fill="#333"/></svg>
+        </button>
+        <button class="brush-btn" data-brush="55" title="大">
+          <svg width="20" height="20"><circle cx="10" cy="10" r="10" fill="#333"/></svg>
+        </button>
+        <button class="btn btn-secondary" id="undoBtn" style="padding:6px 12px;font-size:12px">↩ 戻す</button>
+        <button class="btn btn-secondary" id="restoreBtn" style="padding:6px 12px;font-size:12px">元に戻す</button>
+        <button class="btn btn-primary" id="editDoneBtn" style="padding:6px 14px;font-size:12px;margin-left:auto">完了</button>
+      </div>
       <div class="actions">
         <button class="btn btn-green" id="downloadBtn" disabled>⬇️ ダウンロード</button>
+        <button class="btn btn-blue" id="editModeBtn" disabled>✏️ 手動修正</button>
         <button class="btn btn-secondary" id="newImageBtn">別の画像</button>
       </div>
     </div>
@@ -478,6 +519,13 @@ let blackclothTexture = null;
 // Single mode
 let singleFgImage = null;
 
+// Edit mode
+let editFgCanvas  = null;
+let editHistory   = [];
+let editMode      = false;
+let isErasing     = false;
+let eraserRadius  = 15;
+
 // Batch mode
 let batchQueue = [];
 let batchProcessing = false;
@@ -494,7 +542,7 @@ function loadTexture(url) {
 }
 
 Promise.all([
-  loadTexture('https://images.unsplash.com/photo-1746399565180-0dfbfba51c2b?w=1600&q=85&auto=format&fit=crop'),
+  loadTexture('https://images.pexels.com/photos/7717488/pexels-photo-7717488.jpeg?auto=compress&cs=tinysrgb&w=1600'),
   loadTexture('https://images.unsplash.com/photo-1566041510394-cf7c8fe21800?w=1600&q=85&auto=format&fit=crop'),
   loadTexture('https://images.unsplash.com/photo-1675784332655-675d1a1ddcf6?w=1600&q=85&auto=format&fit=crop'),
 ]).then(([cloth, marble, blackcloth]) => {
@@ -515,6 +563,12 @@ const processingText   = document.getElementById('processingText');
 const progressBar      = document.getElementById('progressBar');
 const downloadBtn      = document.getElementById('downloadBtn');
 const newImageBtn      = document.getElementById('newImageBtn');
+const editModeBtn      = document.getElementById('editModeBtn');
+const editToolbar      = document.getElementById('editToolbar');
+const undoBtn          = document.getElementById('undoBtn');
+const restoreBtn       = document.getElementById('restoreBtn');
+const editDoneBtn      = document.getElementById('editDoneBtn');
+const resultCanvasWrap = resultCanvas.closest('.canvas-wrap');
 const colorInputWrap   = document.getElementById('colorInputWrap');
 const customColorInput = document.getElementById('customColor');
 const shadowToggle     = document.getElementById('shadowToggle');
@@ -576,6 +630,136 @@ shadowToggle.addEventListener('click', () => {
   reapplyAll();
 });
 
+// ─── Edit mode ────────────────────────────────────────────────────────
+editModeBtn.addEventListener('click', () => {
+  if (!singleFgImage) return;
+  enterEditMode();
+});
+editDoneBtn.addEventListener('click', exitEditMode);
+
+document.querySelectorAll('[data-brush]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-brush]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    eraserRadius = parseInt(btn.dataset.brush);
+  });
+});
+
+undoBtn.addEventListener('click', () => {
+  if (!editFgCanvas || editHistory.length <= 1) return;
+  editHistory.pop();
+  const ctx = editFgCanvas.getContext('2d');
+  ctx.putImageData(editHistory[editHistory.length - 1], 0, 0);
+  compositeWithEditFg();
+});
+
+restoreBtn.addEventListener('click', () => {
+  if (!editFgCanvas || !singleFgImage) return;
+  const ctx = editFgCanvas.getContext('2d');
+  ctx.clearRect(0, 0, editFgCanvas.width, editFgCanvas.height);
+  ctx.drawImage(singleFgImage, 0, 0);
+  editHistory = [ctx.getImageData(0, 0, editFgCanvas.width, editFgCanvas.height)];
+  compositeWithEditFg();
+});
+
+// Pointer events for erasing (mouse + touch)
+resultCanvas.addEventListener('pointerdown', e => {
+  if (!editMode) return;
+  e.preventDefault();
+  isErasing = true;
+  // Snapshot before stroke for undo
+  const ctx = editFgCanvas.getContext('2d');
+  const snap = ctx.getImageData(0, 0, editFgCanvas.width, editFgCanvas.height);
+  editHistory.push(snap);
+  if (editHistory.length > 30) editHistory.shift();
+  eraseAt(e);
+});
+resultCanvas.addEventListener('pointermove', e => {
+  if (!editMode || !isErasing) return;
+  e.preventDefault();
+  eraseAt(e);
+});
+resultCanvas.addEventListener('pointerup',     () => { isErasing = false; });
+resultCanvas.addEventListener('pointercancel', () => { isErasing = false; });
+
+function enterEditMode() {
+  editMode = true;
+  if (!editFgCanvas) {
+    editFgCanvas = document.createElement('canvas');
+    editFgCanvas.width  = singleFgImage.naturalWidth;
+    editFgCanvas.height = singleFgImage.naturalHeight;
+    const ctx = editFgCanvas.getContext('2d');
+    ctx.drawImage(singleFgImage, 0, 0);
+    editHistory = [ctx.getImageData(0, 0, editFgCanvas.width, editFgCanvas.height)];
+  }
+  editToolbar.classList.add('visible');
+  editModeBtn.style.display = 'none';
+  resultCanvasWrap.classList.add('edit-mode');
+  resultCanvas.style.touchAction = 'none';
+}
+
+function exitEditMode() {
+  editMode = false;
+  isErasing = false;
+  editToolbar.classList.remove('visible');
+  editModeBtn.style.display = '';
+  resultCanvasWrap.classList.remove('edit-mode');
+  resultCanvas.style.touchAction = '';
+}
+
+function compositeWithEditFg() {
+  if (!editFgCanvas) return;
+  const fw = editFgCanvas.width, fh = editFgCanvas.height;
+  resultCanvas.width  = fw;
+  resultCanvas.height = fh;
+  const ctx = resultCanvas.getContext('2d');
+  ctx.clearRect(0, 0, fw, fh);
+  if (bgSetting !== 'transparent') {
+    const tex = bgSetting === 'cloth'       ? clothTexture
+              : bgSetting === 'marble'      ? marbleTexture
+              : bgSetting === 'blackcloth'  ? blackclothTexture
+              : bgSetting === 'custom-image'? customBgImage
+              : null;
+    if (tex) {
+      ctx.drawImage(tex, 0, 0, fw, fh);
+    } else {
+      ctx.fillStyle = bgSetting === 'custom-color' ? customColorVal : bgSetting;
+      ctx.fillRect(0, 0, fw, fh);
+    }
+  }
+  if (shadowEnabled) {
+    ctx.shadowColor   = 'rgba(0,0,0,0.28)';
+    ctx.shadowBlur    = Math.round(fh * 0.07);
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = Math.round(fh * 0.045);
+  }
+  ctx.drawImage(editFgCanvas, 0, 0);
+  ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+}
+
+function eraseAt(e) {
+  if (!editFgCanvas) return;
+  const rect = resultCanvas.getBoundingClientRect();
+  const scaleX = resultCanvas.width  / rect.width;
+  const scaleY = resultCanvas.height / rect.height;
+  const cx = (e.clientX - rect.left) * scaleX;
+  const cy = (e.clientY - rect.top)  * scaleY;
+  const r  = eraserRadius * scaleX;
+
+  const ctx = editFgCanvas.getContext('2d');
+  ctx.globalCompositeOperation = 'destination-out';
+  const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+  grad.addColorStop(0,   'rgba(0,0,0,1)');
+  grad.addColorStop(0.6, 'rgba(0,0,0,0.85)');
+  grad.addColorStop(1,   'rgba(0,0,0,0)');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalCompositeOperation = 'source-over';
+  compositeWithEditFg();
+}
+
 // ─── Single mode buttons ──────────────────────────────────────────────
 newImageBtn.addEventListener('click', resetToUpload);
 downloadBtn.addEventListener('click', () => {
@@ -614,6 +798,14 @@ function resetToUpload() {
   batchWorkspace.classList.remove('visible');
   uploadArea.style.display = '';
   singleFgImage = null;
+  editFgCanvas  = null;
+  editHistory   = [];
+  editMode      = false;
+  isErasing     = false;
+  editToolbar.classList.remove('visible');
+  editModeBtn.style.display = '';
+  editModeBtn.disabled = true;
+  resultCanvasWrap.classList.remove('edit-mode');
   batchQueue = [];
   batchGrid.innerHTML = '';
   batchDownloadBtn.disabled = true;
@@ -623,8 +815,12 @@ function resetToUpload() {
 
 // ─── Reapply background when settings change ─────────────────────────
 function reapplyAll() {
-  if (singleFgImage && workspace.classList.contains('visible')) {
-    compositeImage(resultCanvas, singleFgImage, null, false);
+  if (workspace.classList.contains('visible')) {
+    if (editFgCanvas) {
+      compositeWithEditFg();
+    } else if (singleFgImage) {
+      compositeImage(resultCanvas, singleFgImage, null, false);
+    }
   }
   if (batchWorkspace.classList.contains('visible')) {
     batchQueue.forEach(item => {
@@ -652,8 +848,10 @@ async function startSingleProcess(file) {
         : 'AIモデルを読み込み中...';
     });
     singleFgImage = await blobToImage(blob);
+    editFgCanvas  = null;
     await compositeImage(resultCanvas, singleFgImage, processingOverlay, true);
-    downloadBtn.disabled = false;
+    downloadBtn.disabled  = false;
+    editModeBtn.disabled  = false;
   } catch (err) {
     processingText.textContent = 'エラー: ' + err.message;
     console.error(err);
