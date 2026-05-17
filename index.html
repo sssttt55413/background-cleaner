@@ -739,6 +739,10 @@ function compositeWithEditFg() {
               : null;
     if (tex) {
       ctx.drawImage(tex, 0, 0, fw, fh);
+      if (bgSetting === 'cloth') {
+        ctx.fillStyle = 'rgba(255,255,255,0.42)';
+        ctx.fillRect(0, 0, fw, fh);
+      }
     } else {
       ctx.fillStyle = bgSetting === 'custom-color' ? customColorVal : bgSetting;
       ctx.fillRect(0, 0, fw, fh);
@@ -1033,7 +1037,7 @@ function resizeForRemoval(file, maxPx = 1024) {
 // ─── Core: run background removal ────────────────────────────────────
 async function runRemoveBg(file, onProgress) {
   const { removeBackground } = await import('https://esm.sh/@imgly/background-removal@1.4.5');
-  const input = await resizeForRemoval(file, 1024);
+  const input = await resizeForRemoval(file, 768);
   return removeBackground(input, {
     progress: (key, current, total) => {
       const pct = total ? Math.round((current / total) * 100) : 0;
@@ -1073,6 +1077,8 @@ async function compositeImage(targetCanvas, fgImg, overlayEl, showOverlay) {
   if (bgSetting !== 'transparent') {
     if (bgSetting === 'cloth' && clothTexture) {
       ctx.drawImage(clothTexture, 0, 0, dim.w, dim.h);
+      ctx.fillStyle = 'rgba(255,255,255,0.42)';
+      ctx.fillRect(0, 0, dim.w, dim.h);
     } else if (bgSetting === 'marble' && marbleTexture) {
       ctx.drawImage(marbleTexture, 0, 0, dim.w, dim.h);
     } else if (bgSetting === 'blackcloth' && blackclothTexture) {
