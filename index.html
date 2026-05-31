@@ -247,6 +247,7 @@
     .btn-secondary { background: #f0f0f0; color: #333; }
     .btn-green { background: #06c755; color: white; }
     .btn-blue { background: #3b82f6; color: white; }
+    .btn-orange { background: #f97316; color: white; }
 
     /* ── Edit toolbar ── */
     .edit-toolbar {
@@ -402,7 +403,7 @@
       <div class="bg-options" id="bgOptions">
         <!-- 白い布 (default) -->
         <div class="bg-option active" data-bg="cloth" title="白い布（おすすめ）"
-          style="background:url('https://images.pexels.com/photos/7717488/pexels-photo-7717488.jpeg?auto=compress&cs=tinysrgb&w=200') center/cover"></div>
+          style="background:linear-gradient(135deg,#fff 0%,#f2f2f2 60%,#e8e8e8 100%)"></div>
         <!-- 白大理石 -->
         <div class="bg-option" data-bg="marble" title="白大理石"
           style="background:url('https://images.unsplash.com/photo-1566041510394-cf7c8fe21800?w=200&q=70&auto=format&fit=crop') center/cover"></div>
@@ -476,6 +477,7 @@
         <button class="btn btn-primary" id="editDoneBtn" style="padding:6px 14px;font-size:12px;margin-left:auto">完了</button>
       </div>
       <div class="actions">
+        <button class="btn btn-orange" id="savePhotoBtn" disabled>📱 写真に保存</button>
         <button class="btn btn-green" id="downloadBtn" disabled>⬇️ ダウンロード</button>
         <button class="btn btn-blue" id="editModeBtn" disabled>✏️ 手動修正</button>
         <button class="btn btn-secondary" id="newImageBtn">別の画像</button>
@@ -530,6 +532,53 @@ let eraserRadius  = 15;
 let batchQueue = [];
 let batchProcessing = false;
 
+// ─── Generate white cloth texture (matches bright studio fabric look) ─
+function generateClothTexture(W = 1400, H = 1400) {
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const ctx = c.getContext('2d');
+
+  // Pure bright white base
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, W, H);
+
+  // Radial light: center-top brightest, edges slightly dimmer
+  const glow = ctx.createRadialGradient(W * 0.48, H * 0.28, 0, W * 0.5, H * 0.5, W * 0.85);
+  glow.addColorStop(0,   'rgba(255,255,255,0.55)');
+  glow.addColorStop(0.45,'rgba(255,255,255,0.10)');
+  glow.addColorStop(1,   'rgba(190,190,190,0.28)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, W, H);
+
+  // Subtle fold shadows — diagonal soft bands like real fabric folds
+  const folds = [
+    { gx0: 0,      gy0: H*0.55, gx1: W*0.28, gy1: H,      alpha: 0.055 },
+    { gx0: W*0.65, gy0: 0,      gx1: W,      gy1: H*0.42, alpha: 0.045 },
+    { gx0: 0,      gy0: H*0.15, gx1: W*0.12, gy1: H*0.48, alpha: 0.035 },
+    { gx0: W*0.8,  gy0: H*0.5,  gx1: W,      gy1: H,      alpha: 0.04  },
+    { gx0: W*0.3,  gy0: H*0.85, gx1: W*0.7,  gy1: H,      alpha: 0.03  },
+  ];
+  folds.forEach(f => {
+    const g = ctx.createLinearGradient(f.gx0, f.gy0, f.gx1, f.gy1);
+    g.addColorStop(0,   `rgba(0,0,0,0)`);
+    g.addColorStop(0.35,`rgba(0,0,0,${f.alpha})`);
+    g.addColorStop(0.5, `rgba(0,0,0,${f.alpha * 1.6})`);
+    g.addColorStop(0.65,`rgba(0,0,0,${f.alpha})`);
+    g.addColorStop(1,   `rgba(0,0,0,0)`);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+  });
+
+  // Very subtle bottom-edge darkening
+  const btm = ctx.createLinearGradient(0, H * 0.72, 0, H);
+  btm.addColorStop(0, 'rgba(0,0,0,0)');
+  btm.addColorStop(1, 'rgba(0,0,0,0.07)');
+  ctx.fillStyle = btm;
+  ctx.fillRect(0, 0, W, H);
+
+  return c;
+}
+
 // ─── Load real photo textures ─────────────────────────────────────────
 function loadTexture(url) {
   return new Promise(resolve => {
@@ -541,12 +590,13 @@ function loadTexture(url) {
   });
 }
 
+// Generate cloth texture immediately (no network needed)
+clothTexture = generateClothTexture();
+
 Promise.all([
-  loadTexture('https://images.pexels.com/photos/7717488/pexels-photo-7717488.jpeg?auto=compress&cs=tinysrgb&w=1600'),
   loadTexture('https://images.unsplash.com/photo-1566041510394-cf7c8fe21800?w=1600&q=85&auto=format&fit=crop'),
   loadTexture('https://images.unsplash.com/photo-1675784332655-675d1a1ddcf6?w=1600&q=85&auto=format&fit=crop'),
-]).then(([cloth, marble, blackcloth]) => {
-  clothTexture      = cloth;
+]).then(([marble, blackcloth]) => {
   marbleTexture     = marble;
   blackclothTexture = blackcloth;
 });
@@ -562,6 +612,7 @@ const processingOverlay= document.getElementById('processingOverlay');
 const processingText   = document.getElementById('processingText');
 const progressBar      = document.getElementById('progressBar');
 const downloadBtn      = document.getElementById('downloadBtn');
+const savePhotoBtn     = document.getElementById('savePhotoBtn');
 const newImageBtn      = document.getElementById('newImageBtn');
 const editModeBtn      = document.getElementById('editModeBtn');
 const editToolbar      = document.getElementById('editToolbar');
@@ -739,10 +790,6 @@ function compositeWithEditFg() {
               : null;
     if (tex) {
       ctx.drawImage(tex, 0, 0, fw, fh);
-      if (bgSetting === 'cloth') {
-        ctx.fillStyle = 'rgba(255,255,255,0.42)';
-        ctx.fillRect(0, 0, fw, fh);
-      }
     } else {
       ctx.fillStyle = bgSetting === 'custom-color' ? customColorVal : bgSetting;
       ctx.fillRect(0, 0, fw, fh);
@@ -789,6 +836,28 @@ downloadBtn.addEventListener('click', () => {
   triggerDownload(resultCanvas.toDataURL(mime, 0.95), `mercari_${Date.now()}.${ext}`);
 });
 
+savePhotoBtn.addEventListener('click', async () => {
+  const mime = bgSetting === 'transparent' ? 'image/png' : 'image/jpeg';
+  const ext  = bgSetting === 'transparent' ? 'png' : 'jpg';
+  const filename = `photo_${Date.now()}.${ext}`;
+
+  resultCanvas.toBlob(async (blob) => {
+    const file = new File([blob], filename, { type: mime });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: '背景クリーナー' });
+      } catch (e) {
+        if (e.name !== 'AbortError') {
+          triggerDownload(URL.createObjectURL(blob), filename);
+        }
+      }
+    } else {
+      // フォールバック：通常ダウンロード
+      triggerDownload(URL.createObjectURL(blob), filename);
+    }
+  }, mime, 0.95);
+});
+
 // ─── Batch mode buttons ───────────────────────────────────────────────
 batchProcessBtn.addEventListener('click', batchProcessAll);
 batchDownloadBtn.addEventListener('click', batchDownloadZip);
@@ -825,7 +894,8 @@ function resetToUpload() {
   isErasing     = false;
   editToolbar.classList.remove('visible');
   editModeBtn.style.display = '';
-  editModeBtn.disabled = true;
+  editModeBtn.disabled  = true;
+  savePhotoBtn.disabled = true;
   resultCanvasWrap.classList.remove('edit-mode');
   batchQueue = [];
   batchGrid.innerHTML = '';
@@ -872,6 +942,7 @@ async function startSingleProcess(file) {
     editFgCanvas  = null;
     await compositeImage(resultCanvas, singleFgImage, processingOverlay, true);
     downloadBtn.disabled  = false;
+    savePhotoBtn.disabled = false;
     editModeBtn.disabled  = false;
   } catch (err) {
     processingText.textContent = 'エラー: ' + err.message;
@@ -1077,8 +1148,6 @@ async function compositeImage(targetCanvas, fgImg, overlayEl, showOverlay) {
   if (bgSetting !== 'transparent') {
     if (bgSetting === 'cloth' && clothTexture) {
       ctx.drawImage(clothTexture, 0, 0, dim.w, dim.h);
-      ctx.fillStyle = 'rgba(255,255,255,0.42)';
-      ctx.fillRect(0, 0, dim.w, dim.h);
     } else if (bgSetting === 'marble' && marbleTexture) {
       ctx.drawImage(marbleTexture, 0, 0, dim.w, dim.h);
     } else if (bgSetting === 'blackcloth' && blackclothTexture) {
